@@ -152,6 +152,13 @@ def _validate_no_whitespace(data):
     return data
 
 
+def _validate_list(data, valid_values=None):
+    if not isinstance(data, list):
+        msg = _("'%s' is not a list") % data
+        LOG.debug(msg)
+        return msg
+
+
 def _validate_mac_address(data, valid_values=None):
     valid_mac = False
     try:
@@ -179,6 +186,19 @@ def _validate_ip_address(data, valid_values=None):
         netaddr.IPAddress(_validate_no_whitespace(data))
     except Exception:
         msg = _("'%s' is not a valid IP address") % data
+        LOG.debug(msg)
+        return msg
+
+
+def _validate_port(data, valid_values=None):
+    return _validate_range(data, valid_values=[1, 66535])
+
+
+def _validate_ip_network(data, valid_values=None):
+    try:
+        netaddr.IPNetwork(_validate_no_whitespace(data))
+    except Exception:
+        msg = _("'%s' is not a valid IP network") % data
         LOG.debug(msg)
         return msg
 
@@ -558,6 +578,7 @@ validators = {'type:dict': _validate_dict,
               'type:ip_address': _validate_ip_address,
               'type:ip_address_or_none': _validate_ip_address_or_none,
               'type:ip_pools': _validate_ip_pools,
+              'type:list': _validate_list,
               'type:mac_address': _validate_mac_address,
               'type:mac_address_or_none': _validate_mac_address_or_none,
               'type:nameservers': _validate_nameservers,
@@ -577,7 +598,9 @@ validators = {'type:dict': _validate_dict,
               'type:uuid_or_none': _validate_uuid_or_none,
               'type:uuid_list': _validate_uuid_list,
               'type:values': _validate_values,
-              'type:boolean': _validate_boolean}
+              'type:boolean': _validate_boolean,
+              'type:port': _validate_port,
+              'type:ip_network': _validate_ip_network}
 
 # Define constants for base resource name
 
