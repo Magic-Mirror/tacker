@@ -29,7 +29,7 @@ class FakeDriverManager(mock.Mock):
             return str(uuid.uuid4())
 
 
-class FakeDeviceStatus(mock.Mock):
+class FakeVNFMonitor(mock.Mock):
     pass
 
 
@@ -43,7 +43,7 @@ class TestVNFMPlugin(db_base.SqlTestCase):
         self.addCleanup(mock.patch.stopall)
         self.context = context.get_admin_context()
         self._mock_device_manager()
-        self._mock_device_status()
+        self._mock_vnf_monitor()
         self._mock_green_pool()
         self.vnfm_plugin = plugin.VNFMPlugin()
 
@@ -56,12 +56,12 @@ class TestVNFMPlugin(db_base.SqlTestCase):
         self._mock(
             'tacker.common.driver_manager.DriverManager', fake_device_manager)
 
-    def _mock_device_status(self):
-        self._device_status = mock.Mock(wraps=FakeDeviceStatus())
-        fake_device_status = mock.Mock()
-        fake_device_status.return_value = self._device_status
+    def _mock_vnf_monitor(self):
+        self._vnf_monitor = mock.Mock(wraps=FakeVNFMonitor())
+        fake_vnf_monitor = mock.Mock()
+        fake_vnf_monitor.return_value = self._vnf_monitor
         self._mock(
-            'tacker.vm.monitor.DeviceStatus', fake_device_status)
+            'tacker.vm.monitor.VNFMonitor', fake_vnf_monitor)
 
     def _mock_green_pool(self):
         self._pool = mock.Mock(wraps=FakeGreenPool())
@@ -117,9 +117,8 @@ class TestVNFMPlugin(db_base.SqlTestCase):
                                                             mock.ANY)
 
     def test_create_vnf(self):
-        device_template_obj = self._insert_dummy_device_template()
+        self._insert_dummy_device_template()
         vnf_obj = utils.get_dummy_vnf_obj()
-        vnf_obj['vnf']['vnfd_id'] = device_template_obj['id']
         result = self.vnfm_plugin.create_vnf(self.context, vnf_obj)
         self.assertIsNotNone(result)
         self.assertIn('id', result)
@@ -142,7 +141,7 @@ class TestVNFMPlugin(db_base.SqlTestCase):
                                                        plugin=mock.ANY,
                                                        context=mock.ANY,
                                                        device_id=mock.ANY)
-        self._device_status.delete_hosting_device.assert_called_with(mock.ANY)
+        self._vnf_monitor.delete_hosting_vnf.assert_called_with(mock.ANY)
         self._pool.spawn_n.assert_called_once_with(mock.ANY, mock.ANY,
                                                    mock.ANY)
 

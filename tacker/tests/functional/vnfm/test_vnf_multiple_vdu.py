@@ -1,5 +1,4 @@
 # Copyright 2015 Brocade Communications System, Inc.
-#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -14,18 +13,21 @@
 
 from oslo_config import cfg
 
-from tacker.tests.functional.vnfd import base
+from tacker.common import utils
+from tacker.tests import constants
+from tacker.tests.functional.vnfm import base
 from tacker.tests.utils import read_file
 
+import yaml
 
 CONF = cfg.CONF
-VNF_CIRROS_CREATE_TIMEOUT = 120
 
 
-class VnfTestJSON(base.BaseTackerTest):
-    def test_create_delete_vnf_no_monitoring(self):
+class VnfTestMultipleVDU(base.BaseTackerTest):
+    def test_create_delete_vnf_with_multiple_vdus(self):
         data = dict()
-        data['tosca'] = read_file('sample_cirros_vnf_no_monitoring.yaml')
+        input_yaml = read_file('sample-vnfd-multi-vdu.yaml')
+        data['tosca'] = input_yaml
         toscal = data['tosca']
         tosca_arg = {'vnfd': {'attributes': {'vnfd': toscal}}}
 
@@ -36,28 +38,36 @@ class VnfTestJSON(base.BaseTackerTest):
         ##Create vnf with vnfd_id
         vnfd_id = vnfd_instance['vnfd']['id']
         vnf_arg = {'vnf': {'vnfd_id': vnfd_id, 'name':
-            "test_vnf_with_cirros_no_monitoring"}}
+            "test_vnf_with_multiple_vdus"}}
         vnf_instance = self.client.create_vnf(body = vnf_arg)
-        self.assertIsNotNone(vnf_instance)
-        self.assertIsNotNone(vnf_instance['vnf']['id'])
-        self.assertIsNotNone(vnf_instance['vnf']['instance_id'])
-        self.assertEqual(vnf_instance['vnf']['vnfd_id'], vnfd_instance[
-            'vnfd']['id'])
 
         vnf_id = vnf_instance['vnf']['id']
-        self.wait_until_vnf_active(vnf_id, VNF_CIRROS_CREATE_TIMEOUT)
+        self.wait_until_vnf_active(vnf_id,
+                                   constants.VNF_CIRROS_CREATE_TIMEOUT,
+                                   constants.ACTIVE_SLEEP_TIME)
         self.assertEqual(self.client.show_vnf(vnf_id)['vnf']['status'],
                          'ACTIVE')
-        self.assertIsNotNone(self.client.show_vnf(vnf_id)['vnf']['mgmt_url'])
+        self.validate_vnf_instance(vnfd_instance, vnf_instance)
+
+        ##Validate mgmt_url with input yaml file
+        mgmt_url = self.client.show_vnf(vnf_id)['vnf']['mgmt_url']
+        self.assertIsNotNone(mgmt_url)
+        mgmt_dict = yaml.load(str(mgmt_url))
+
+        input_dict = yaml.load(input_yaml)
+        self.assertEqual(len(mgmt_dict.keys()), len(input_dict['vdus'].keys()))
+        for vdu in input_dict['vdus'].keys():
+            self.assertIsNotNone(mgmt_dict[vdu])
+            self.assertEqual(True, utils.is_valid_ipv4(mgmt_dict[vdu]))
 
         ##Delete vnf_instance with vnf_id
         try:
             self.client.delete_vnf(vnf_id)
         except Exception:
-            assert False, "vnf Delete failed"
+            assert False, "vnf Delete of test_vnf_with_multiple_vdus failed"
 
         ##Delete vnfd_instance
         try:
             self.client.delete_vnfd(vnfd_id)
         except Exception:
-            assert False, "vnfd Delete failed"
+            assert False, "vnfd Delete of sample-vnfd-multiple-vdus failed"

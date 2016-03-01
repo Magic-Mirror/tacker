@@ -1,8 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
 # Copyright 2015 Intel Corporation.
-# Copyright 2015 Isaku Yamahata <isaku.yamahata at intel com>
-#                               <isaku.yamahata at gmail com>
 # All Rights Reserved.
 #
 #
@@ -17,9 +15,6 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-#
-# @author: Isaku Yamahata, Intel Corporation.
-# shamelessly many codes are stolen from gbp simplechain_driver.py
 
 import sys
 import time
@@ -29,6 +24,7 @@ from heatclient import client as heat_client
 from heatclient import exc as heatException
 from keystoneclient.v2_0 import client as ks_client
 from oslo_config import cfg
+from toscaparser.utils import yamlparser
 
 from tacker.common import log
 from tacker.extensions import vnfm
@@ -181,8 +177,7 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
             return port
 
         networks_list = []
-        outputs_dict = {}
-        template_dict['outputs'] = outputs_dict
+        outputs_dict = template_dict['outputs']
         properties['networks'] = networks_list
         for network_param in vdu_dict[
                 'network_interfaces'].values():
@@ -199,7 +194,7 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
                 network_param = {
                     'port': {'get_resource': port}
                 }
-            networks_list.append(network_param)
+            networks_list.append(dict(network_param))
 
     @log.log
     def create(self, plugin, context, device):
@@ -216,7 +211,6 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
 
         # overwrite parameters with given dev_attrs for device creation
         dev_attrs = device['attributes'].copy()
-        config_yaml = dev_attrs.pop('config', None)
         fields.update(dict((key, dev_attrs.pop(key)) for key
                       in ('stack_name', 'template_url', 'template')
                       if key in dev_attrs))
@@ -233,7 +227,7 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
             outputs_dict = {}
             template_dict['outputs'] = outputs_dict
 
-            vnfd_dict = yaml.load(vnfd_yaml)
+            vnfd_dict = yamlparser.simple_ordered_parse(vnfd_yaml)
             LOG.debug('vnfd_dict %s', vnfd_dict)
 
             if 'get_input' in vnfd_yaml:
@@ -244,6 +238,8 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
             for (key, vnfd_key) in KEY_LIST:
                 if vnfd_key in vnfd_dict:
                     template_dict[key] = vnfd_dict[vnfd_key]
+
+            monitoring_dict = {'vdus': {}}
 
             for vdu_id, vdu_dict in vnfd_dict.get('vdus', {}).items():
                 template_dict.setdefault('resources', {})[vdu_id] = {
@@ -277,31 +273,32 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
                     for key, value in metadata.items():
                         metadata[key] = value[:255]
 
-                # monitoring_policy = vdu_dict.get('monitoring_policy', None)
-                # failure_policy = vdu_dict.get('failure_policy', None)
+                monitoring_policy = vdu_dict.get('monitoring_policy', 'noop')
+                failure_policy = vdu_dict.get('failure_policy', 'noop')
+
+                # Convert the old monitoring specification to the new format
+                # This should be removed after Mitaka
+                if monitoring_policy == 'ping' and failure_policy == 'respawn':
+                    vdu_dict['monitoring_policy'] = {'ping': {
+                                                       'actions': {
+                                                           'failure': 'respawn'
+                                                       }}}
+                    vdu_dict.pop('failure_policy')
+
+                if monitoring_policy != 'noop':
+                    monitoring_dict['vdus'][vdu_id] = \
+                        vdu_dict['monitoring_policy']
 
                 # to pass necessary parameters to plugin upwards.
-                for key in ('monitoring_policy', 'failure_policy',
-                            'service_type'):
+                for key in ('service_type',):
                     if key in vdu_dict:
                         device.setdefault(
-                            'attributes', {})[key] = vdu_dict[key]
+                            'attributes', {})[vdu_id] = jsonutils.dumps(
+                                {key: vdu_dict[key]})
 
-            if config_yaml is not None:
-                config_dict = yaml.load(config_yaml)
-                resources = template_dict.setdefault('resources', {})
-                for vdu_id, vdu_dict in config_dict.get('vdus', {}).items():
-                    if vdu_id not in resources:
-                        continue
-                    config = vdu_dict.get('config', None)
-                    if not config:
-                        continue
-                    properties = resources[vdu_id].setdefault('properties', {})
-                    properties['config_drive'] = True
-                    metadata = properties.setdefault('metadata', {})
-                    metadata.update(config)
-                    for key, value in metadata.items():
-                        metadata[key] = value[:255]
+            if monitoring_dict.keys():
+                device['attributes']['monitoring_policy'] = jsonutils.dumps(
+                                                              monitoring_dict)
 
             heat_template_yaml = yaml.dump(template_dict)
             fields['template'] = heat_template_yaml
@@ -374,7 +371,13 @@ class DeviceHeat(abstract_driver.DeviceAbstractDriver):
         update_yaml = device['device'].get('attributes', {}).get('config', '')
         LOG.debug('yaml orig %(orig)s update %(update)s',
                   {'orig': config_yaml, 'update': update_yaml})
-        config_dict = yaml.load(config_yaml) or {}
+
+        # If config_yaml is None, yaml.load() will raise Attribute Error.
+        # So set config_yaml to {}, if it is None.
+        if not config_yaml:
+            config_dict = {}
+        else:
+            config_dict = yaml.load(config_yaml) or {}
         update_dict = yaml.load(update_yaml)
         if not update_dict:
             return
