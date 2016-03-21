@@ -225,7 +225,7 @@ function _create_tacker_conf_dir {
 function configure_tacker {
     iniset "/$Q_PLUGIN_CONF_FILE" ml2 extension_drivers port_security
     iniset "/$Q_PLUGIN_CONF_FILE" ml2_type_flat flat_networks $PUBLIC_PHYSICAL_NETWORK,$MGMT_PHYS_NET
-    iniset "/$Q_PLUGIN_CONF_FILE" ovs bridge_mappings $PUBLIC_PHYSICAL_NETWORK:$PUBLIC_BRIDGE,$MGMT_PHYS_NET:$BR_MGMT
+    #iniset "/$Q_PLUGIN_CONF_FILE" ovs bridge_mappings $PUBLIC_PHYSICAL_NETWORK:$PUBLIC_BRIDGE,$MGMT_PHYS_NET:$BR_MGMT
     _create_tacker_conf_dir
     iniset_rpc_backend tacker $TACKER_CONF
 
@@ -299,7 +299,7 @@ function configure_tacker {
 
     _tacker_setup_rootwrap
     echo "Creating bridge"
-    sudo ovs-vsctl --may-exist add-br ${BR_MGMT}
+    #sudo ovs-vsctl --may-exist add-br ${BR_MGMT}
 }
 
 # Utility Functions
@@ -388,9 +388,9 @@ function tacker_create_initial_network {
     NET1_ID=$(neutron net-create --shared ${NET1} | awk '/ id /{print $4}')
     SUBNET1_ID=$(neutron subnet-create --name ${SUBNET1} --ip-version 4 --gateway ${NETWORK_GATEWAY1} ${NET1_ID} ${FIXED_RANGE1} | awk '/ id /{print $4}')
 
-    echo "Assign ip address to BR_MGMT"
-    sudo ifconfig ${BR_MGMT} inet 0.0.0.0
-    sudo ifconfig ${BR_MGMT} inet ${NETWORK_GATEWAY_MGMT_IP}
+    #echo "Assign ip address to BR_MGMT"
+    #sudo ifconfig ${BR_MGMT} inet 0.0.0.0
+    #sudo ifconfig ${BR_MGMT} inet ${NETWORK_GATEWAY_MGMT_IP}
 }
 
 
