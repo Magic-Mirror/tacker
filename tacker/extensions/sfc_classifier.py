@@ -153,13 +153,6 @@ RESOURCE_ATTRIBUTE_MAP = {
             'is_visible': True,
             'default': {},
         },
-        'service_contexts': {
-            'allow_post': True,
-            'allow_put': False,
-            'validate': {'type:service_context_list': None},
-            'is_visible': True,
-            'default': [],
-        },
         'services': {
             'allow_post': False,
             'allow_put': False,
