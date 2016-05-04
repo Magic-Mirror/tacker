@@ -73,12 +73,7 @@ class SFCPlugin(sfc_db.SFCPluginDb):
             sfc_dict[vnf]['ip'] = re.search(r'[0-9]+(?:\.[0-9]+){3}', vnf_data['mgmt_url']).group()
             # trozet check here to see how services are passed
             # we can only specify 1 atm for ODL
-	    template_service_types = vnf_data['device_template']['service_types']
-            for service_types in template_service_types:
-                service_type = service_types['service_type']
-                if service_type != 'vnfd':
-		    LOG.debug('----service_type: %s', service_type)
-                    sfc_dict[vnf]['type'] = service_type
+            sfc_dict[vnf]['type'] = vnf_data['attributes']['service_type']
             sfc_dict[vnf]['name'] = vnf_data['name']
             # we also need the neutron port ID
             # tacker doesnt find this so we can use the vnf id to find the
